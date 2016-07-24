@@ -1,121 +1,103 @@
 #pragma once
 
 #include "clang/Lex/PPCallbacks.h"
-#include "ClangFrontEnd.h"
+#include "clang/Lex/Lexer.h"
+#include "llvm/ADT/StringSet.h"
+
+#include "RecorderCollection.h"
+
+#include <map>
+#include <memory>
+
 
 namespace clang{
   class Lexer;
-};
+  class CompilerInstance;
+  class SourceManager;
+  class Sema;
+  class Lexer;
+  class Token;
+  class FunctionDecl;
 
-enum PushType{
-  PushType_Invalid = 0,
-  PushType_String,
-  PushType_StackSlot,
-  PushType_StackSlotBase,
-  PushType_MemberTable,
-};
-
-class PushEntry{
-
-public:
-  PushEntry() : Type(PushType_Invalid), StackSlot(0){
-  }
-
-  PushEntry(const clang::StringRef& strLiteral){
-    StringLiteral = new std::string(strLiteral);
-    Type = PushType_String;
-  }
-  
-  PushEntry(PushType typeNum) : Type(typeNum), StackSlot(0){
-  }
-
-  PushEntry(PushType typeNum, int stackSlot): Type(typeNum), StackSlot(stackSlot){
-  }
-
-  PushEntry(int stackSlot){
-    StackSlot = stackSlot;
-    Type = PushType_StackSlot;
-  }
-
-public:
-  PushType Type;
-  union{
-    std::string* StringLiteral;
-    int StackSlot;
+  namespace tok{
+    enum TokenKind;
   };
 };
 
-class RecordEntry{
-
-public:
-  int FunctionId;
-  std::string RecordOptions;
-  std::string Name;
-  std::string TraceRecorder;
-  int RecordLineNumber;
-  std::vector<PushEntry> PushStack;
-};
-
-class ObjectData{
-public:
-  std::vector<RecordEntry*> MemberFunctions;
-  std::vector<RecordEntry*> MetaFunctions;
-};
-
-
-class MacroCollector{
-
-public:
-  explicit MacroCollector();
-  ~MacroCollector();
-  void SetCompilerInstance(clang::CompilerInstance& ci);
-
-  void ProcessStackAlias(clang::Lexer& lexer);
-  
-  void ProcessPush(clang::Lexer& lexer, const clang::Token &MacroNameTok, clang::SourceRange range);
-  void ProcessRecord(clang::Lexer& lexer, const clang::Token &MacroNameTok, clang::SourceRange range);
-
-  static clang::StringRef TokenToStringRef(clang::Token& tok);
-  
-  ObjectData* GetFunctionList(std::string& objectName);
-
-  void SetInModule(clang::StringRef& name){
-    InModule = true;
-  }
-
-public:
-  RecordEntry* functionEntry;
-  std::vector<RecordEntry*> GobalFunctions;
-  std::vector<RecordEntry*> AllFunctions;
-  std::map<std::string, ObjectData*> ObjectFunctions;
-
-private:
-  friend class MacroRecorder;
-  PushEntry ParsePushValue(clang::Lexer& lexer);
-  clang::SourceManager* SM;
-  
-  int FunctionId;
-  bool InModule;
-  
-  llvm::StringMap<PushEntry> StackAlias;
-};
 
 class MacroRecorder : public clang::PPCallbacks {
 public:
-  explicit MacroRecorder(clang::CompilerInstance& ci, MacroCollector* collector) : 
-      CI(&ci), SM(&ci.getSourceManager()), Collector(collector) {
-   
-    collector->SetCompilerInstance(ci);
-  }
+  explicit MacroRecorder(clang::CompilerInstance& ci, RecorderCollection* collector, bool verbose);
 
-  std::string GetMacroArgs(const clang::Token &MacroNameTok, clang::SourceRange& Range);
-  
-  
-  void MacroExpands(const clang::Token &macroNameTok, const clang::MacroInfo* MI, clang::SourceRange range);
-  void MacroDefined(const clang::Token &macroNameTok, const clang::MacroInfo* MI);
+  void MacroExpands(const clang::Token &macroNameTok, const clang::MacroInfo* MI, clang::SourceRange range) override;
 
 private:
-  MacroCollector* Collector;
+  void Parse_StackAlias();
+  void Parse_Push();
+  void Parse_Record();
+  void Parse_Record_GetSetField();
+  void Parse_NeedsFlag();
+  void Parse_NoExtern();
+  void Parse_Module();
+  
+  bool ParsePushValue(PushEntry& result);
+  bool SkipToNextToken(clang::tok::TokenKind endToken);
+  
+  std::string GetMacroArgs(const clang::Token &macroNameTok, clang::SourceRange& Range);
+  bool ParseRecordArgParam(std::string& option);
+
+  static clang::StringRef TokenToStringRef(clang::Token& tok);
+
+  void FinalizeRecorder();
+  void SetCurrentEntryInvalid(const std::string& reason);
+  
+  bool LexExpect(clang::tok::TokenKind token){
+    
+    if(EndOfMacro){
+      return false;
+    }
+    
+    EndOfMacro = MacroLexer->LexFromRawLexer(tok);
+    return tok.is(token);
+  }
+
+  bool LexExpect(clang::tok::TokenKind token1, clang::tok::TokenKind token2){
+    return LexExpect(token1) && LexExpect(token2);
+  }
+
+  bool LexExpectEnd(clang::tok::TokenKind token){
+    return LexExpect(token) && EndOfMacro;
+  }
+
+  bool LexExpectEither(clang::tok::TokenKind token1, clang::tok::TokenKind token2){
+    return (tok.is(token1) || tok.is(token2));
+  }
+
+  int GetStartingLineNumber(){
+    return SM->getExpansionLineNumber(MacroLocation.getBegin());
+  }
+
+  RecorderCollection* Collector;
+
+private:
+  void SetupKeywords();
+
+  bool Verbose;
+  RecordEntry* functionEntry;
+  llvm::StringMap<PushEntry> StackAlias;
+  llvm::StringSet<> NoExtern;
+
+  int CurrentLine;
+  llvm::StringRef CurrentKeyword;
+  std::string MacroArgs;
+  
+  bool EndOfMacro;
+  clang::Lexer* MacroLexer;
+  clang::Token tok;
+  clang::SourceRange MacroLocation;
+
   clang::SourceManager* SM;
   clang::CompilerInstance* CI;
+
+  static llvm::StringMap<int> KeywordLookup;
 };

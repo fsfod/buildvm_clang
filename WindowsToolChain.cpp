@@ -15,9 +15,9 @@
 #include "clang/Basic/Version.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Path.h"
-#include "clang/Frontend/HeaderSearchOptions.h"
+#include "clang/Lex/HeaderSearchOptions.h"
 
-#include <boost/filesystem.hpp>
+#include "llvm/Support/FileSystem.h"
 
 // Include the necessary headers to interface with the Windows registry and
 // environment.
@@ -91,9 +91,11 @@ const char versionString[] = "$VERSION";
 /// There can be additional characters in the component.  Only the numberic
 /// characters are compared.
 static bool getSystemRegistryString(const StringRef& keyPath, const char *valueName, std::string& result, const std::string& requiredSubDir = std::string()) {
+
+  using namespace llvm::sys;
+
   HKEY hKey = NULL;
   StringRef subKey;
-  DWORD valueType;
   long lResult;
   bool returnValue = false;
 
@@ -132,11 +134,17 @@ static bool getSystemRegistryString(const StringRef& keyPath, const char *valueN
         if(!FetchRegKeyStringValue(hRootKey, versionedPath.data(), valueName, keyValue))continue;
 
         if(requiredSubDir.empty()){
-          if(!boost::filesystem::exists(keyValue))continue;
+          if(!fs::exists(keyValue)){
+            continue;
+          }
         }else{
-          boost::filesystem::path subDir(keyValue);
-          
-          if(!boost::filesystem::exists(subDir/requiredSubDir))continue;
+          SmallVector<char, 255> pathBuffer;
+
+          path::append(pathBuffer, keyValue, requiredSubDir);
+
+          if(!fs::exists(pathBuffer.data())){
+            continue;
+          }
         }
 
         char numBuf[32];
@@ -188,9 +196,8 @@ void AdjustStudioDir(std::string& VSDir){
   }
 }
 
-
-  // Get Visual Studio installation directory.
-static bool getVisualStudioDir(std::string &path) {
+  // Get Visual Studio installation directory default to the highests unless the version is supplied
+static bool getVisualStudioDir(std::string &path, const char* version = NULL) {
   // First check the environment variables that vsvars32.bat sets.
   const char* vcinstalldir = getenv("VCINSTALLDIR");
   
@@ -202,10 +209,12 @@ static bool getVisualStudioDir(std::string &path) {
     return true;
   }
 
+  std::string versionString = version == NULL ? "$VERSION" : version;
+
   std::string vsIDEInstallDir;
   // Then try the windows registry.
   bool hasVCDir = getSystemRegistryString(
-    "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\$VERSION",
+    "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\"+versionString,
     "InstallDir", vsIDEInstallDir);
 
   // If we have both vc80 and vc90, pick version we were compiled with.
@@ -218,13 +227,17 @@ static bool getVisualStudioDir(std::string &path) {
   std::string vsExpressIDEInstallDir;
 
   bool hasVCExpressDir = getSystemRegistryString(
-    "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VCExpress\\$VERSION",
+    "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VCExpress\\"+versionString,
     "InstallDir", vsExpressIDEInstallDir, "include");
 
   if(hasVCExpressDir && !vsExpressIDEInstallDir.empty()) {
      AdjustStudioDir(vsExpressIDEInstallDir);
      path = vsExpressIDEInstallDir;
     return true;
+  }
+
+  if(version != NULL){
+    return false;
   }
 
   // Try the environment.
@@ -266,14 +279,14 @@ static bool getVisualStudioDir(std::string &path) {
 
 
 void addSystemInclude(clang::HeaderSearchOptions& headerSearchOptions, std::string& path){
-  headerSearchOptions.AddPath(path, clang::frontend::System, false, false, false);
+  headerSearchOptions.AddPath(path, clang::frontend::System, false, false);
 }
 
 void addSystemInclude(clang::HeaderSearchOptions& headerSearchOptions, StringRef& path){
-  headerSearchOptions.AddPath(path, clang::frontend::System, false, false, false);
+  headerSearchOptions.AddPath(path, clang::frontend::System, false, false);
 }
 
-void AddClangSystemIncludeArgs(clang::HeaderSearchOptions& headerSearch, const std::string& windowsSDKVer) {
+void AddClangSystemIncludeArgs(clang::HeaderSearchOptions& headerSearch, const std::string& windowsSDKVer, const char* vsVersion) {
 
 #ifdef _MSC_VER
   // Honor %INCLUDE%. It should know essential search paths with vcvarsall.bat.
@@ -295,6 +308,15 @@ void AddClangSystemIncludeArgs(clang::HeaderSearchOptions& headerSearch, const s
   std::string VSDir;
   std::string WindowsSDKDir;
 
+  for (auto it = headerSearch.UserEntries.begin(); it != headerSearch.UserEntries.end(); it++){
+
+    if(it->Path.find("\\VC\\include") != -1){
+      headerSearch.UserEntries.erase(it);
+      break;
+    }
+  }
+
+
   if(!windowsSDKVer.empty()){
     getSystemRegistryString(std::string("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Microsoft SDKs\\Windows\\")+windowsSDKVer,
                                "InstallationFolder", WindowsSDKDir, "include");
@@ -302,7 +324,7 @@ void AddClangSystemIncludeArgs(clang::HeaderSearchOptions& headerSearch, const s
 
   // When built with access to the proper Windows APIs, try to actually find
   // the correct include paths first.
-  if (getVisualStudioDir(VSDir)) {
+  if (getVisualStudioDir(VSDir, vsVersion)) {
     addSystemInclude(headerSearch, VSDir + "\\VC\\include");
     
     if(WindowsSDKDir.empty())getWindowsSDKDir(WindowsSDKDir);

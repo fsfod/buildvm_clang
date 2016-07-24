@@ -3,19 +3,17 @@
 
 using std::string;
 
-LibRegBuilder::LibRegBuilder(MacroCollector* collectedMacros, const std::string& outputPath) : CollectedMacros(collectedMacros), 
+LibRegBuilder::LibRegBuilder(RecorderCollection* collectedMacros, const std::string& outputPath) : CollectedMacros(collectedMacros), 
   CurrentObject(NULL), output(outputPath){
 }
 
 
 void LibRegBuilder::WriteRecorderArray(std::vector<RecordEntry*>& functionList){
-  //{&TraceRecorder, RecordData, }
 
-
-  output << "FunctionInfo RecorderInfo[] = {\n";
+  output << "RecorderInfo TraceRecorderInfo[] = {\n";
 
   for each (RecordEntry* entry in functionList){
-    output << "  {&" << entry->TraceRecorder << ", "<< entry->RecordOptions <<", \"" << entry->Name << "\", &lj_cf_" << entry->Name << "},\n";
+    output << "  {&" << entry->TraceRecorder << ", "<< entry->RecordOptions <<", \"" << entry->Name << "\"},\n";
   }
 
   output << "};\n\n";
@@ -24,103 +22,144 @@ void LibRegBuilder::WriteRecorderArray(std::vector<RecordEntry*>& functionList){
 void LibRegBuilder::WriteExtenList(std::vector<RecordEntry*>& functionList){
 
   output << "struct RecordFFData;\n";
+  output << "struct jit_State;\n\n";
 
   for each (RecordEntry* var in functionList){
-    output << "extern int lj_cf_" << var->Name << "(lua_State* L);\n";
-    output << "extern void LJ_FASTCALL " << var->TraceRecorder <<"(jit_State *J, struct RecordFFData *rd);\n";
+    if(var->Name.empty())continue;
+    output << "extern int " << var->Name << "(lua_State* L);\n";
   }
 
   output << "\n\n";
 }
 
+//write the header of the function that registers an objects member and meta functions table
 void LibRegBuilder::WriteRegObjectFunctionStart(const string& objectName){
 
-  output << "void Register_" << objectName << "(lua_State* L, GCtab* mtList, GCtab* membersList){\n\n";
-  output << "  GCfunc* func;\n";
-  output << "  TValue* slot;\n";
+  output << "void Register_" << objectName << "(lua_State* L, uint32_t options){\n";
 }
 
 void LibRegBuilder::WriteFunctionInit(RecordEntry& entry, const char* outputTable, int subNameStart){
+  
+  if(!entry.Valid){
+    return;
+  }
 
-  output << "\n  func = lj_func_newfastC(L, &RecorderInfo[" << entry.FunctionId << "], " << entry.PushStack.size() << ");\n";
+  if(!entry.RequiredFlag.empty()){
+    output << "\n  if((options&" << entry.RequiredFlag << ") != 0){\n";
+  }else{
+    output << "\n";
+  }
 
-  for(int i = 0; i < entry.PushStack.size() ;i++){
+  for(size_t i = 0; i < entry.PushStack.size() ;i++){
     const PushEntry& pushValue = entry.PushStack[i];
 
     switch (pushValue.Type){
       case PushType_String:
-        output << "  setstrV(L, &func->c.upvalue[" << i << "], lj_str_newz(L, \"" << (*pushValue.StringLiteral) << "\"));\n";
+        output << "  lua_pushstring(L, \"" << (*pushValue.StringLiteral) << "\");\n";
       break;
 
       case PushType_MemberTable:
-        assert(CurrentObject->MemberFunctions.size() != 0);
-        output << "  settabV(L, &func->c.upvalue[" << i << "], memberTable);\n";
+       // assert(CurrentObject->MemberFunctions.size() != 0);
+        output << "  lua_pushvalue(L, memberTable);\n";
+      break;
+
+      case PushType_StaticMemberTable:
+       // assert(CurrentObject->MemberFunctions.size() != 0);
+        output << "  lua_getfield(L, LUA_GLOBALSINDEX, \"" << CurrentObject->Name;
+
+        if(CurrentObject->ObjectType == Object_CData){
+          output << "_FFIIndex\");\n";
+        }else{
+          output << "\");\n";
+        }
+      break;
+
+      case PushType_MT:
+        output << "  luaL_newmetatable(L, \"" << (*pushValue.StringLiteral) << "\");\n";
+      break;
+
+      case PushType_Global:
+        output << "  lua_getfield(L, LUA_GLOBALSINDEX, \"" << (*pushValue.StringLiteral) << "\");\n";
       break;
 
       case PushType_StackSlotBase:
-        output << "  copyTV(L, &func->c.upvalue[" << i << "], L->base+" << pushValue.StackSlot << ");\n";
+        output << "  lua_pushvalue(L, "<< pushValue.StackSlot << ");\n";
       break;
 
       case PushType_StackSlot:
-        output << "  copyTV(L, &func->c.upvalue[" << i << "], L->top-" << pushValue.StackSlot << ");\n";
+        output << "  lua_pushvalue(L, -" << pushValue.StackSlot << ");\n";
       break;
 
       default:
-        assert(false, "unknown push type");
+        assert(false && "unknown push type");
       break;
     }
   }
+  
+  output << "  lua_pushcfastfunc(L, &" << entry.Name << ", " << entry.PushStack.size() << ",  &" << entry.TraceRecorder << ", "<< entry.RecordOptions <<", \"" << entry.Name << "\");\n";
 
   string& name = entry.Name.find('_') != string::npos ?  entry.Name.substr(subNameStart) : entry.Name;
 
-  output << "  slot = lj_tab_setstr(L, " << outputTable << ", lj_str_newz(L, \"" << name << "\"));\n";
-  output << "  setfuncV(L, slot, func);\n";
-  output << "  L->top--;\n";
+  output << "  lua_setfield(L, " << outputTable << ", \"" << name << "\");\n";
+
+  if(!entry.RequiredFlag.empty()){
+    output << "  }\n";
+  }
 }
 
-const char* HeaderList = "extern \"C\"{\n"
-"#include \"lj_obj.h\"\n"
-"#include \"lj_str.h\"\n"
-"#include \"lj_tab.h\"\n"
-"#include \"lj_func.h\"\n"
-"#include \"lj_jit.h\"\n"
-"#include \"lj_ir.h\"\n"
-"}\n"
+
+const char* HeaderList = "#define LUA_LIB\n\
+extern \"C\"{\n\
+#include \"lj_ir.h\"\n\
+}\n\
+\n\n";
 
 
-void LibRegBuilder::WriteTableCreate(const std::string& tableName, int size, const std::string& destTable, const std::string& destKey){
+void LibRegBuilder::WriteTableCreate(const std::string& tableName, int size, const std::string& destTable, const std::string& destKey, int arraySize){
 
-  output << "  GCtab *" << tableName << " = lj_tab_new(L, 0, hsize2hbits(" << size << "));\n";
-  output << "  settabV(L, L->top++, " << tableName << ");\n";
+  if(CurrentObject->ObjectType == Object_CData){
+    
+  }
 
-  output << "  slot = lj_tab_setstr(L, " << destTable << ", lj_str_newz(L, \"" << destKey << "\"));\n";
-  output << "  settabV(L, slot, " << tableName << ");\n";
-  output << "  L->top--;\n";
+  output << "\n  lua_createtable(L, "<< arraySize <<", " << size << ");\n";
+  output << "  lua_pushvalue(L, -1);\n";
+  output << "  lua_setfield(L, " << destTable <<  ", \"" << destKey << "\");\n";
+  output << "  int " << tableName << " = lua_gettop(L);\n";
 }
 
-void LibRegBuilder::WriteLibReg(){
+void LibRegBuilder::WriteCDataMtCreate(int size, const std::string& typeId){
+
+  output << "\n  lua_createtable(L, 0, " << size << ");\n";
+  output << "  SetCTypeMT(L, " << typeId << ", tabV(L->top-1));\n";
+  
+  output << "  int metaTable = lua_gettop(L);\n";
+}
+
+bool LibRegBuilder::RecordersValid(){
+
+  for each (RecordEntry* var in CollectedMacros->AllFunctions){
+    if(!var->Valid){
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void LibRegBuilder::WriteLibReg(std::vector<string>& includeList){
 
   output << HeaderList;
 
+  for(auto include = includeList.begin(); include != includeList.end() ;include++){
+    output << "#include \"" << *include << "\"\n";
+  }
+
   WriteExtenList(CollectedMacros->AllFunctions);
 
-  WriteRecorderArray(CollectedMacros->AllFunctions);
+  //WriteRecorderArray(CollectedMacros->AllFunctions);
 
   auto start = CollectedMacros->ObjectFunctions.begin();
   auto end = CollectedMacros->ObjectFunctions.end();
-
-  if(CollectedMacros->GobalFunctions.size() != 0){
-    
-    output << "void Register_Lib(lua_State* L, GCtab* libTable){\n\n";
-    output << "  GCfunc* func;\n";
-    output << "  TValue* slot;\n";
-
-    for each (RecordEntry* var in CollectedMacros->GobalFunctions){
-      WriteFunctionInit(*var, "libTable", 0);
-    }
-
-    output << "}\n\n";
-  }
 
   for(auto objectEntry = start; objectEntry != end ;objectEntry++){
 
@@ -130,24 +169,29 @@ void LibRegBuilder::WriteLibReg(){
 
     auto& memberList = objectEntry->second->MemberFunctions;
     auto& metaList = objectEntry->second->MetaFunctions;
-    
-    if(memberList.size() != 0){
-      WriteTableCreate("memberTable", memberList.size(), "membersList", objectEntry->first);
+   
+    //Create a the members table for this object if it has any member functions defined and also store
+    //the created table in the members list table thats on the Lua stack at mtList+1
+    if(CurrentObject->NeedsMemberTable){
+
+      if(CurrentObject->ObjectType == Object_CData){
+        output << "  int memberTable = GetOrCreateTable(L, LUA_GLOBALSINDEX,\"" << objectEntry->first << "_FFIIndex\");\n";
+      }else{
+        output << "  int memberTable = GetOrCreateTable(L, LUA_GLOBALSINDEX,\"" << objectEntry->first << "\");\n";
+      }
     }
-    
+
+    //Create a the metatable for this object if it has any metamethods defined also store the created 
+    //table in the metatable list table thats on the Lua stack at the index contained in mtList
     if(metaList.size() != 0){
-       WriteTableCreate("metaTable", metaList.size(), "mtList", objectEntry->first);
-      //output << "  GCtab *metaTable = lj_tab_new(L, 0, hsize2hbits(" << metaList.size() << "));\n";
-      //output << "  settabV(L, L->top++, metaTable);\n";
-      //
-      //output << "  slot = lj_tab_setstr(L, mtList, lj_str_newz(L, \"" << objectEntry->first << "\"));\n";
-      //output << "  settabV(L, slot, metaTable);\n";
-      //output << "  L->top--;\n";
+      if(CurrentObject->ObjectType == Object_CData){
+        //WriteCDataMtCreate(metaList.size()*2, "(libFlags >> 16)");
+        WriteTableCreate("metaTable", metaList.size(), "LUA_GLOBALSINDEX", objectEntry->first+"MT", 0);
+      }else{
+        output << "  int metaTable = GetOrCreateTable(L, LUA_REGISTRYINDEX,\"" << objectEntry->first << "\");\n";
+      }
     }
 
-    if(memberList.size() != 0)output << "  settabV(L, L->top++, memberTable);\n";
-
- 
     if(memberList.size() != 0){
       for each (RecordEntry* var in memberList){
         WriteFunctionInit(*var, "memberTable", objectEntry->first.size()+1);
@@ -160,8 +204,38 @@ void LibRegBuilder::WriteLibReg(){
       }
     }
 
+    //clear the memberTable and/or metaTable tables off the stack if they were created for this object since were
+    //at the end of this objects registration function
+    if(memberList.size() != 0 && metaList.size() != 0){
+      output << "  lua_pop(L, 2);\n";
+    }else{
+      output << "  lua_pop(L, 1);\n";
+    }
+
     output << "}\n\n";
   }
 
+  output << "extern int MTListMarker, MembersListMarker;\n\n";
+
+  //build the main exported registration function that calls all the other object registration functions
+  output << "void Register_LuaLib(lua_State* L, uint32_t options){\n\n";
+
+
+  if(CollectedMacros->GobalFunctions.size() != 0){
+    
+    for each (RecordEntry* var in CollectedMacros->GobalFunctions){
+      WriteFunctionInit(*var, "libTable", 0);
+    }
+  }
+
+  //emit all the calls to the object registration functions we created earlier
+  for(auto objectEntry = start; objectEntry != end ;objectEntry++){
+    if(objectEntry->second->ObjectType != Object_CData){
+      output << "  Register_" << objectEntry->first << "(L, options);\n";
+    }
+  }
+
+  output << "  lua_pop(L, 2);\n}\n\n";
+  
   output.flush();
 }

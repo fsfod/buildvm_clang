@@ -12,7 +12,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{636C2E45-AD5A-4578-8386-685BCEFD918E}</ProjectGuid>
-    <RootNamespace>tutorial6</RootNamespace>
+    <RootNamespace>buildvmclang</RootNamespace>
     <VCTargetsPath Condition="'$(VCTargetsPath11)' != '' and '$(VSVersion)' == '' and $(VisualStudioVersion) == ''">$(VCTargetsPath11)</VCTargetsPath>
     <ProjectName>buildvm_clang</ProjectName>
   </PropertyGroup>
@@ -26,7 +26,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
     <PlatformToolset>v100</PlatformToolset>
   </PropertyGroup>
@@ -35,26 +35,46 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\LuaJIT.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\LuaJIT.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup />
-  <Import Project="SharedBuild.targets" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)build\$(ProjectName)\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IntDir>$(SolutionDir)build\$(ProjectName)\$(Configuration)\</IntDir>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)build\$(ProjectName)\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IntDir>$(SolutionDir)build\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <DisableSpecificWarnings>4996;4800;4244;4355;4146</DisableSpecificWarnings>
-      <AdditionalIncludeDirectories>$(LLVMIncludes);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4996;4800;4244;4355;4146;4291;4345</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>$(ClangSourceDir)\include;$(LLVMSourceDir)\include;$(LLVMBuildDir)\include;$(ClangBuildDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>false</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LLVMLibsDirs);$(ClangBuildDir)\lib\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(LLVMLibs);clangTooling.lib;clangFrontend.lib;clangFrontendTool.lib;clangDriver.lib;clangBasic.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/LIBPATH:"$(LLVMBuildDir)\lib\debug" "/LIBPATH:"$(ClangBuildDir)\lib\debug" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>advapi32.lib;kernel32.lib;shell32.lib;LLVMSupport.lib;LLVMCore.lib;LLVMMC.lib;LLVMAsmParser.lib;LLVMX86Info.lib;LLVMX86AsmParser.lib;LLVMMCParser.lib;LLVMX86Utils.lib;LLVMX86Desc.lib;LLVMX86AsmPrinter.lib;LLVMBitReader.lib;clangAnalysis.lib;clangAST.lib;clangASTMatchers.lib;clangBasic.lib;clangEdit.lib;clangDriver.lib;clangLex.lib;clangTooling.lib;clangFrontend.lib;clangFrontendTool.lib;clangParse.lib;clangSerialization.lib;clangSema.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <CustomBuildStep>
+      <Command>xcopy "$(TargetPath)" "$(SolutionDir)tools" /y</Command>
+      <Outputs>$(SolutionDir)tools/$(TargetFileName)</Outputs>
+      <Message>Custom Build Step Copy $(TargetFileName) to tools dir</Message>
+      <Inputs>$(TargetPath)</Inputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -62,28 +82,51 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>$(LLVMIncludes);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4996;4800;4244;4355;4146</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>$(ClangSourceDir)\include;$(LLVMSourceDir)\include;$(LLVMBuildDir)\include;$(ClangBuildDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4996;4800;4244;4355;4146;4291;4345</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalOptions>/LIBPATH:"$(LLVMBuildDir)\lib\MinSizeRel"  /LIBPATH:"$(ClangBuildDir)\lib\MinSizeRel" %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>$(LLVMLibs);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>advapi32.lib;kernel32.lib;shell32.lib;LLVMSupport.lib;LLVMCore.lib;LLVMMC.lib;LLVMAsmParser.lib;LLVMX86Info.lib;LLVMX86AsmParser.lib;LLVMMCParser.lib;LLVMX86Utils.lib;LLVMX86Desc.lib;LLVMX86AsmPrinter.lib;LLVMBitReader.lib;clangAnalysis.lib;clangAST.lib;clangASTMatchers.lib;clangBasic.lib;clangEdit.lib;clangDriver.lib;clangLex.lib;clangTooling.lib;clangFrontend.lib;clangFrontendTool.lib;clangParse.lib;clangSerialization.lib;clangSema.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <CustomBuildStep>
+      <Command>xcopy "$(TargetPath)" "$(SolutionDir)tools" /y</Command>
+      <Outputs>$(SolutionDir)tools/$(TargetFileName)</Outputs>
+      <Message>Custom Build Step Copy $(TargetFileName) to tools dir</Message>
+      <Inputs>$(TargetPath)</Inputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ASTMatchersPCH.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)ASTMatchers.pch</PrecompiledHeaderOutputFile>
+    </ClCompile>
+    <ClCompile Include="ASTMatchFinder.cpp" />
+    <ClCompile Include="FastFunctionCollector.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)ASTMatchers.pch</PrecompiledHeaderOutputFile>
+    </ClCompile>
     <ClCompile Include="LibRegBuilder.cpp" />
+    <ClCompile Include="RecorderCollection.cpp" />
     <ClCompile Include="WindowsToolChain.cpp" />
     <ClCompile Include="Buildvm_clang.cpp" />
-    <ClCompile Include="ClangFrontend.cpp" />
     <ClCompile Include="MacroRecorder.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ClangFrontEnd.h" />
+    <ClInclude Include="ASTMatchFinder.h" />
+    <ClInclude Include="FastFunctionCollector.h" />
     <ClInclude Include="LibRegBuilder.h" />
     <ClInclude Include="MacroRecorder.h" />
+    <ClInclude Include="RecorderCollection.h" />
+    <ClInclude Include="RecorderEntry.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

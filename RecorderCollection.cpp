@@ -279,9 +279,9 @@ void RecorderCollection::RegisterEntryToGroup(RecordEntry* entry){
   if(Objectname.empty()){
     auto& diag = CI->getDiagnostics();
 
-    unsigned id = diag.getCustomDiagID(DiagnosticsEngine::Error, "Record entry "+ entry->Name +" is missing a under slash in its name.");
-
+    unsigned id = diag.getCustomDiagID(DiagnosticsEngine::Error, "Record entry %s is missing a under slash in its name.");
     clang::DiagnosticBuilder B = CI->getDiagnostics().Report(id);
+    B.AddString(entry->Name);
 
     return;
   }
@@ -311,13 +311,13 @@ ObjectRecorderData* RecorderCollection::GetFunctionList(std::string& objectName)
   return returnValue;
 }
 
-void RecorderCollection::ReportError(const std::string& msg){
+void RecorderCollection::ReportError(const char* fmtmsg, const StringRef fmtarg){
 
   auto& diag = CI->getDiagnostics();
-
-  unsigned id = diag.getCustomDiagID(DiagnosticsEngine::Error, msg);
+  unsigned id = diag.getDiagnosticIDs()->getCustomDiagID((clang::DiagnosticIDs::Level)DiagnosticsEngine::Error, fmtmsg);
 
   clang::DiagnosticBuilder B = CI->getDiagnostics().Report(id);
+  B.AddString(fmtarg);
 }
 
 void RecorderCollection::ModuleDefined(std::string& name, std::string& moduleType){
@@ -329,6 +329,6 @@ void RecorderCollection::ModuleDefined(std::string& name, std::string& moduleTyp
   }else if(moduleType == "cdata"){
     object->ObjectType = Object_CData;
   }else{
-    ReportError("Module "+name+" specified invalid");
+    ReportError("Module %s specified invalid", name);
   }
 }

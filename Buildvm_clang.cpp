@@ -10,6 +10,7 @@
 #include "clang/Parse/ParseAST.h"
 
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "llvm/Support/TargetSelect.h"
 
 #include "MacroRecorder.h"
@@ -31,7 +32,9 @@ extern void AddClangSystemIncludeArgs(clang::HeaderSearchOptions& headerSearch, 
 
 using namespace clang::tooling;
 using namespace llvm;
+//using namespace clang::tooling::ASTConsumer;
 using clang::CompilerInstance;
+using std::unique_ptr;
 
 
 class ParseLJ : public clang::FrontendAction{
@@ -42,14 +45,15 @@ public:
   ParseLJ(bool verbose) :Verbose(verbose){
   }
 
-  virtual clang::ASTConsumer *CreateASTConsumer(CompilerInstance &CI, StringRef InFile){
-    CI.getPreprocessor().addPPCallbacks(new MacroRecorder(CI, LJMacros, Verbose));
+  unique_ptr<clang::ASTConsumer> CreateASTConsumer(CompilerInstance &CI, StringRef InFile) override{
+    CI.getPreprocessor().addPPCallbacks(std::make_unique<MacroRecorder>(CI, LJMacros, Verbose));
 
     LJMacros->NewSourceFile();
 
-    currentConsumer = GetASTConsumer(CI, LJMacros, Verbose);
+    auto astconsumer = GetASTConsumer(CI, LJMacros, Verbose);
+    currentConsumer.reset();
 
-    return currentConsumer;
+    return unique_ptr<clang::ASTConsumer>(astconsumer);
   }
 
   bool usesPreprocessorOnly() const{
@@ -72,9 +76,14 @@ public:
     AddClangSystemIncludeArgs(CI.getHeaderSearchOpts(), "v7.0A", "8.0");//"v7.0A");
 
     clang::LangOptions* languageOptions = &CI.getLangOpts();
-    // languageOptions-
-    clang::CompilerInvocation::setLangDefaults(*languageOptions, clang::IK_CXX, clang::LangStandard::lang_cxx03);
 
+    llvm::Triple triple;
+    triple.setArch(Triple::x86);
+    triple.setOS(Triple::Win32);
+    triple.setVendor(Triple::PC);
+    // languageOptions-
+    clang::CompilerInvocation::setLangDefaults(*languageOptions, clang::IK_CXX, triple, CI.getPreprocessorOpts(), clang::LangStandard::lang_cxx11);
+    //Triple( Triple:: Triple::x86
 #if defined(_MSC_VER)
     languageOptions->MicrosoftMode = true;
     languageOptions->MicrosoftExt = true;
@@ -92,7 +101,7 @@ public:
 
 private:
   bool Verbose;
-  clang::ASTConsumer* currentConsumer;
+  unique_ptr<clang::ASTConsumer> currentConsumer;
 };
 
 class LJFrontendActionFactory : public FrontendActionFactory {
@@ -135,12 +144,13 @@ cl::opt<bool> VerboseOutput(
 
 int main(int argc, const char **argv, char * const *envp){
 
-  llvm::OwningPtr<CompilationDatabase> Compilations(FixedCompilationDatabase::loadFromCommandLine(argc, argv));
+  unique_ptr<FixedCompilationDatabase> Compilations;
+  Compilations.reset(FixedCompilationDatabase::loadFromCommandLine(argc, argv));
   cl::ParseCommandLineOptions(argc, argv);
 
   if(!Compilations){
     std::string ErrorMessage;
-    Compilations.reset(CompilationDatabase::autoDetectFromSource(SourcePaths[0], ErrorMessage));
+   // Compilations = CompilationDatabase::autoDetectFromSource(SourcePaths[0], ErrorMessage);
     
     if(!Compilations)llvm::report_fatal_error(ErrorMessage);
   }

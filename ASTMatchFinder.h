@@ -30,13 +30,17 @@ public:
   void addMatcher(const NestedNameSpecifierLocMatcher &NodeMatch, MatchFinder::MatchCallback *Action);
   void addMatcher(const TypeLocMatcher &NodeMatch, MatchFinder:: MatchCallback *Action);
 
+  bool addDynamicMatcher(const internal::DynTypedMatcher & NodeMatch, MatchFinder::MatchCallback * Action);
+
 private:
+  /*Visit declarations as there parsed instead after the whole file is parsed loading macro context */
   bool HandleTopLevelDecl(clang::DeclGroupRef d) override;
   void HandleTranslationUnit(ASTContext &Context) override;
 
   void* Visitor;
   clang::ASTContext& ActiveASTContext;
-  std::vector<std::pair<const internal::DynTypedMatcher*, MatchFinder::MatchCallback*> > MatcherCallbackPairs;
+  MatchFinder::MatchersByType Matchers;
+  MatchFinder::ParsingDoneTestCallback *ParsingDone;
 };
 
 }

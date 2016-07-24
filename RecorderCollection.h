@@ -35,7 +35,7 @@ public:
 
 private:
   void RegisterEntryToGroup(RecordEntry* entry);
-  void ReportError(const std::string& msg);
+  void ReportError(const char* fmtmsg, StringRef fmtvalue);
   ObjectRecorderData* GetFunctionList(std::string& objectName);
 
 public:

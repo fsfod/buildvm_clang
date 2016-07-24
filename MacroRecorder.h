@@ -19,8 +19,8 @@ namespace clang{
   class Token;
   class FunctionDecl;
 
-  namespace tok{
-    enum TokenKind;
+  namespace tok {
+    enum TokenKind : unsigned short;
   };
 };
 
@@ -29,7 +29,7 @@ class MacroRecorder : public clang::PPCallbacks {
 public:
   explicit MacroRecorder(clang::CompilerInstance& ci, RecorderCollection* collector, bool verbose);
 
-  void MacroExpands(const clang::Token &macroNameTok, const clang::MacroInfo* MI, clang::SourceRange range) override;
+  void MacroExpands(const clang::Token &MacroNameTok, const clang::MacroDefinition &MD, clang::SourceRange Range, const clang::MacroArgs *Args) override;
 
 private:
   void Parse_StackAlias();
@@ -49,7 +49,7 @@ private:
   static clang::StringRef TokenToStringRef(clang::Token& tok);
 
   void FinalizeRecorder();
-  void SetCurrentEntryInvalid(const std::string& reason);
+  void SetCurrentEntryInvalid(const char* reason, StringRef fmarg = "");
   
   bool LexExpect(clang::tok::TokenKind token){
     

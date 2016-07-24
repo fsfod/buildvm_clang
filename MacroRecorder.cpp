@@ -2,6 +2,7 @@
 
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Sema/Sema.h"
+#include "clang/Lex/MacroArgs.h"
 
 #include <iostream>
 #include <sstream> 
@@ -77,7 +78,7 @@ void MacroRecorder::SetupKeywords(){
   handler(); \
   break; \
 
-void MacroRecorder::MacroExpands(const Token &macroNameTok, const clang::MacroInfo* MI, SourceRange range) {
+void MacroRecorder::MacroExpands(const clang::Token &macroNameTok, const clang::MacroDefinition &MD, SourceRange range, const clang::MacroArgs *Args) {
 
   StringRef name = macroNameTok.getIdentifierInfo()->getName();
 
@@ -89,6 +90,10 @@ void MacroRecorder::MacroExpands(const Token &macroNameTok, const clang::MacroIn
   EndOfMacro = false;
 
   MacroArgs = GetMacroArgs(macroNameTok, range);
+
+// Args->getUnexpArgument();
+
+   // Args->
 
   clang::Lexer lexer(range.getBegin().getLocWithOffset(name.size()+1),
                      CI->getLangOpts(),
@@ -155,7 +160,7 @@ StringRef MacroRecorder::TokenToStringRef(Token& tok){
    
   switch(tok.getKind()){
     case tok::raw_identifier:
-      return StringRef(tok.getRawIdentifierData(), tok.getLength());
+      return tok.getRawIdentifier();
 
     case tok::numeric_constant:
       return StringRef(tok.getLiteralData(), tok.getLength());
@@ -214,7 +219,7 @@ bool MacroRecorder::ParsePushValue(PushEntry& result){
       result = PushEntry(mt ? PushType_MT : PushType_Global);
            
       if(!LexExpect(tok::comma) || !LexExpectEnd(tok::raw_identifier)){
-        SetCurrentEntryInvalid(("Expected "+identifer+" table name").str());
+        SetCurrentEntryInvalid("Expected %s table name");
        return false;
       }
 
@@ -224,7 +229,7 @@ bool MacroRecorder::ParsePushValue(PushEntry& result){
       auto alias = StackAlias.find(identifer);
 
       if(alias == StackAlias.end()){
-        SetCurrentEntryInvalid(("Unknown stack alias "+identifer).str());
+        SetCurrentEntryInvalid("Unknown stack alias %s");
        return false;
       }
 
@@ -530,22 +535,18 @@ void MacroRecorder::Parse_Record(){
   FinalizeRecorder();
 }
 
-
-
 void MacroRecorder::FinalizeRecorder(){
-
   Collector->RecorderFinalized(functionEntry);
-
   functionEntry = new RecordEntry();
 }
 
-void MacroRecorder::SetCurrentEntryInvalid(const std::string& reason){
+void MacroRecorder::SetCurrentEntryInvalid(const char* reason, StringRef fmtarg){
 
   DiagnosticsEngine& diag = CI->getDiagnostics();
-
-  unsigned id = diag.getCustomDiagID(DiagnosticsEngine::Error, reason);
+  unsigned id = diag.getDiagnosticIDs()->getCustomDiagID((clang::DiagnosticIDs::Level)DiagnosticsEngine::Error, reason);
 
   DiagnosticBuilder B = CI->getDiagnostics().Report(tok.getLastLoc(), id);
+  B.AddString(fmtarg);
 
   functionEntry->Valid = false;
 }

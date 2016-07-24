@@ -21,14 +21,14 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v100</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>false</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v100</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -66,8 +66,8 @@
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(LLVMLibsDirs);$(ClangBuildDir)\lib\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalOptions>/LIBPATH:"$(LLVMBuildDir)\lib\debug" "/LIBPATH:"$(ClangBuildDir)\lib\debug" %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>advapi32.lib;kernel32.lib;shell32.lib;LLVMSupport.lib;LLVMCore.lib;LLVMMC.lib;LLVMAsmParser.lib;LLVMX86Info.lib;LLVMX86AsmParser.lib;LLVMMCParser.lib;LLVMX86Utils.lib;LLVMX86Desc.lib;LLVMX86AsmPrinter.lib;LLVMBitReader.lib;clangAnalysis.lib;clangAST.lib;clangASTMatchers.lib;clangBasic.lib;clangEdit.lib;clangDriver.lib;clangLex.lib;clangTooling.lib;clangFrontend.lib;clangFrontendTool.lib;clangParse.lib;clangSerialization.lib;clangSema.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalOptions>/LIBPATH:"$(LLVMBuildDir)debug\lib" "/LIBPATH:"$(ClangBuildDir)debug\lib" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>advapi32.lib;kernel32.lib;shell32.lib;version.lib;LLVMSupport.lib;LLVMOption.lib;LLVMCore.lib;LLVMMC.lib;LLVMProfileData.lib;LLVMAsmParser.lib;LLVMMCDisassembler.lib;LLVMX86Info.lib;LLVMX86Desc.lib;LLVMX86AsmParser.lib;LLVMMCParser.lib;LLVMX86Utils.lib;LLVMX86AsmPrinter.lib;LLVMBitReader.lib;clangAnalysis.lib;clangAST.lib;clangASTMatchers.lib;clangBasic.lib;clangEdit.lib;clangDriver.lib;clangLex.lib;clangTooling.lib;clangFrontend.lib;clangFrontendTool.lib;clangParse.lib;clangSerialization.lib;clangSema.lib</AdditionalDependencies>
     </Link>
     <CustomBuildStep>
       <Command>xcopy "$(TargetPath)" "$(SolutionDir)tools" /y</Command>
@@ -90,8 +90,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalOptions>/LIBPATH:"$(LLVMBuildDir)\lib\MinSizeRel"  /LIBPATH:"$(ClangBuildDir)\lib\MinSizeRel" %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>advapi32.lib;kernel32.lib;shell32.lib;LLVMSupport.lib;LLVMCore.lib;LLVMMC.lib;LLVMAsmParser.lib;LLVMX86Info.lib;LLVMX86AsmParser.lib;LLVMMCParser.lib;LLVMX86Utils.lib;LLVMX86Desc.lib;LLVMX86AsmPrinter.lib;LLVMBitReader.lib;clangAnalysis.lib;clangAST.lib;clangASTMatchers.lib;clangBasic.lib;clangEdit.lib;clangDriver.lib;clangLex.lib;clangTooling.lib;clangFrontend.lib;clangFrontendTool.lib;clangParse.lib;clangSerialization.lib;clangSema.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalOptions>/LIBPATH:"$(LLVMBuildDir)\MinSizeRel\lib"  /LIBPATH:"$(ClangBuildDir)\MinSizeRel\lib" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>advapi32.lib;kernel32.lib;shell32.lib;version.lib;LLVMSupport.lib;LLVMOption.lib;LLVMCore.lib;LLVMMC.lib;LLVMProfileData.lib;LLVMAsmParser.lib;LLVMMCDisassembler.lib;LLVMX86Info.lib;LLVMX86Desc.lib;LLVMX86AsmParser.lib;LLVMMCParser.lib;LLVMX86Utils.lib;LLVMX86AsmPrinter.lib;LLVMBitReader.lib;clangAnalysis.lib;clangAST.lib;clangASTMatchers.lib;clangBasic.lib;clangEdit.lib;clangDriver.lib;clangLex.lib;clangTooling.lib;clangFrontend.lib;clangFrontendTool.lib;clangParse.lib;clangSerialization.lib;clangSema.lib</AdditionalDependencies>
     </Link>
     <CustomBuildStep>
       <Command>xcopy "$(TargetPath)" "$(SolutionDir)tools" /y</Command>

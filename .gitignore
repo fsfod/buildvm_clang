@@ -1,0 +1,7 @@
+*.user
+*.filters
+*.suo
+*sdf
+*.aps
+*.json
+*.o
